@@ -27,6 +27,10 @@ var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
+var util = require('util');
+var rest = require('restler');
+var URL_DEFAULT = null; // "http://aqueous-cove-5739.herokuapp.com";
+
 var assertFileExists = function(infile) {
   var instr = infile.toString();
   if (!fs.existsSync(instr)) {
@@ -35,6 +39,11 @@ var assertFileExists = function(infile) {
   }
   return instr;
 };
+
+var assertUrlExists = function(urllink) {
+  var instr = urllink.toString();
+  return instr;
+}
 
 var cheerioHtmlFile = function(htmlfile) {
   return cheerio.load(fs.readFileSync(htmlfile));
@@ -61,14 +70,56 @@ var clone = function(fn) {
   return fn.bind({});
 };
 
+var processFile = function(htmlfile, checksfile) {
+  var checkJson = checkHtmlFile(htmlfile, checksfile);
+  var outJson = JSON.stringify(checkJson, null, 4);
+  console.log(outJson);
+}
+
+var buildfn = function(urllink, htmlfile, checksfile) {
+  var response2Url = function(result, response) {
+    if(result instanceof Error) {
+      msg = 'Unable to load urllink';
+      // console.log("result is an error");
+      if (response != null) {
+        msg = response.message;
+      }
+      // console.error('Error: ' + util.format(msg));
+      // console.log('Processing html file provided: ' + htmlfile);
+      if (htmlfile != null) {
+        processFile(htmlfile, checksfile);
+      }
+    } else {
+      // console.log("Read urllink %s", urllink);
+      fs.writeFileSync("myindex.html", result);
+      processFile("myindex.html", checksfile);
+    }
+  };
+  return response2Url;
+}
+
+var processUrl = function(urllink, htmlfile, checksfile) {
+  var response2Url = buildfn(urllink, htmlfile, checksfile);
+  rest.get(urllink).on('complete', response2Url);
+}
+
 if (require.main == module) {
   program
     .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
     .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+    .option('-u, --url <url_link>', 'Path to url link', clone(assertUrlExists), URL_DEFAULT)
     .parse(process.argv);
-  var checkJson = checkHtmlFile(program.file, program.checks);
-  var outJson = JSON.stringify(checkJson, null, 4);
-  console.log(outJson);
+
+  // console.log('program.file is %s', program.file);
+  // console.log('program.checks is %s', program.checks);
+  // console.log('program.url is %s', program.url);
+  if (program.url != null) {
+    // console.log('url is not null');
+    processUrl(program.url, program.file, program.checks);
+  } else {
+    // console.log('url is null');
+    processFile(program.file, program.checks);
+  }
 } else {
   exports.checkHtmlFile = checkHtmlFile;
 }
